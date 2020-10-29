@@ -1,0 +1,25 @@
+# Build and test CPAN module: AndroidBuild
+
+name: Test
+
+on:
+  push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install
+      run: |
+        sudo apt update
+        sudo apt -y install build-essential tree
+        sudo cpan install Data::Table::Text
+
+    - name: Test
+      run: |
+        tree
+        perl Build.PL
+        perl Build test
