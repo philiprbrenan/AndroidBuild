@@ -14,7 +14,7 @@ use Data::Table::Text qw(:all);
 use File::Copy;
 use POSIX qw(strftime);                                                         # http://www.cplusplus.com/reference/ctime/strftime/
 
-our $VERSION = '20181006';
+our $VERSION = '20201114';
 
 #-------------------------------------------------------------------------------
 # Constants
@@ -440,8 +440,8 @@ sub make
   my @src          = @{$android->src};
   my @libs         = @{$android->libs};
   my $manifest     = $android->getManifestFile;
-  my $binRes       = filePath($bin, $res);
-  my $classes      = filePath($bin, qw(classes));
+  my $binRes       = filePath($bin, q(res));
+  my $classes      = filePath($bin, q(classes));
   my $api          = $bin."$getAppName.ap_";
   my $apj          = $bin."$getAppName-unaligned.apk";
   my $apk          = $bin."$getAppName.apk";
@@ -487,7 +487,7 @@ sub make
     zzz($c);
    }
 
-  if (1)                                                                        # Dx
+  if (1)                                                                        # 'Dx'
    {my $j = join ' ', @libs;                                                    # Jar files to include in dex
     zzz("$dx --incremental --dex --force-jumbo ".
         " --output $classes.dex $classes $j");
@@ -511,9 +511,11 @@ sub make
     zzz("cd $bin && zip -qv $apj classes.dex");                                 # Add dexed classes
    }
 
-  if (my $assetsFiles = $android->assets)                                       # Create asset files if necessary
-   {my $assetsFolder  = $android->getAssFolder;
-    writeFiles($assetsFiles, $assetsFolder);
+  my $assetsFolder = $android->getAssFolder;
+  my $assetsFiles  = $android->assets;                                          # Create asset files if necessary
+
+  if ($assetsFiles or -d $assetsFolder)                                         # Create asset files if necessary
+   {writeFiles($assetsFiles, $assetsFolder) if $assetsFiles;                    # Write assets file system hash if supplied
     zzz(qq(cd $assetsFolder && cd .. && zip -rv $apj assets));                  # Add assets to apk
    }
 
@@ -571,9 +573,11 @@ sub install2($)                                                                 
   my $package    = $android->getPackage;
   my $activity   = $android->activityX;
   my $adb        = $android->getAdb." $device ";
-
+# say STDERR "Install app";
   zzz("$adb install -r $apk");
+# say STDERR "Start app";
   zzz("$adb shell am start $package/.Activity");
+# say STDERR "App installed and started";
  }
 
 sub lint2($)                                                                    #P Lint all the source code java files for the app
@@ -603,7 +607,7 @@ if (1) {                                                                        
   genLValueScalarMethods(qw(activity));                                         # Activity name: default is B<Activity>. The name of the activity to start on your android device: L<device|/device> is L<package|/package>/L<Activity|/Activity>
   genLValueScalarMethods(qw(assets));                                           # A hash containing your assets folder (if any).  Each key is the file name in the assets folder, each corresponding value is the data for that file. The keys of this hash may contain B</> to create sub folders.
   genLValueScalarMethods(qw(buildTools));                                       # Name of the folder containing the build tools to be used to build the app, see L<prerequisites|/prerequisites>
-  genLValueScalarMethods(qw(buildFolder));                                      # Name of a folder in which to build the app, The default is B</tmp/app/>
+  genLValueScalarMethods(qw(buildFolder));                                      # Name of a folder in which to build the app, The default is B</tmp/app/>. If you wish to include assets with your app, specify a named build folder and load it with the desired assets before calling L<compile> or specify the assets via L<assets>.
   genLValueScalarMethods(qw(classes));                                          # A folder containing precompiled java classes and jar files that you wish to L<lint|/lint> against.
   genLValueScalarMethods(qw(debug));                                            # The app will be debuggable if this option is true.
   genLValueScalarMethods(qw(device));                                           # Device to run on, default is the only emulator or specify '-d', '-e', or '-s SERIAL' per L<adb|http://developer.android.com/guide/developing/tools/adb.html>
@@ -680,9 +684,11 @@ sub run($)                                                                      
 
 Android::Build - Lint, compile, install, run an Android app using the command line tools minus Ant and Gradle thus freeing development effort from the strictures imposed by Android Studio.
 
-=head1 Prerequisites
+=head1 Synopsis
 
- sudo apt-get install imagemagick zip openjdk-8-jdk
+=head2 Prerequisites
+
+ sudo apt-get install imagemagick zip openjdk-8-jdk openjdk-8-jre
  sudo cpan install Data::Table::Text Data::Dump Carp POSIX File::Copy;
 
 You will need a version of the
@@ -694,13 +700,35 @@ Download:
 
   wget https://dl.google.com/android/repository/sdk-tools-linux-3859397.zip
 
-then using the sdkmanager to get the version of the SDK that you want to use,
-for example:
+and unzip to get a copy of B<sdkmanager> which can be used to get the version of
+the SDK that you want to use, for example:
 
   sdkmanager --list --verbose
 
-  sdkmanager 'platforms;android-25'  'build-tools;25.0.3' emulator \
-   'system-images;android-25;google_apis;x86_64'
+Download the SDK components to be used:
+
+  (cd  android/sdk/; tools/bin/sdkmanager         \
+  echo 'y' | android/sdk/tools/bin/sdkmanager     \
+   'build-tools;25.0.3' emulator 'platform-tools' \
+   'platforms;android-25' 'system-images;android-25;google_apis;x86_64')
+
+Add to these components to the B<$PATH> variable for easy command line use:
+
+  export PATH=$PATH:~/android/sdk/tools/:~/android/sdk/tools/bin:\
+  ~/android/sdk/platform-tools/:~/android/sdk/build-tools/25.0.3
+
+Create an AVD:
+
+ avdmanager create avd --name aaa \
+   -k 'system-images;android-25;google_apis;x86_64' -g google_apis
+
+Start the B<AVD> with a specified screen size (you might need to go into the
+B<android/sdk/tools> folder):
+
+ emulator -avd aaa -skin "2000x1000"
+
+Running L<compile> will load the newly created L<apk> into the emulator as long
+as it is the only one running.
 
 =head1 Synopsis
 
@@ -723,6 +751,11 @@ for example:
 
 Modify the code above to reflect your local environment, then start an emulator
 and run the modified code to compile your app and load it into the emulator.
+
+If you wish to include assets with your app, either use L<buildFolder> to
+specify a build area and place your assets in the B<assets> sub directory of
+this folder before using L<compile> to compile your app, else use the L<assets>
+keyword to specify a hash of assets to be included with your app.
 
 =head2 Sample App
 
