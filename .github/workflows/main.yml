@@ -18,10 +18,6 @@ jobs:
         sudo apt -y install build-essential tree
         sudo cpan install Data::Table::Text Module::Build Digest::SHA1 JSON
 
-    - name: InstallDataTableText
-      run: |
-        sudo cpan install Data::Table::Text
-
 
 
     - name: Test
